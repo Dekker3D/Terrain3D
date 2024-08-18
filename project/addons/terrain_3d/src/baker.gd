@@ -191,7 +191,7 @@ func _bake_nav_region_nav_mesh(p_nav_region: NavigationRegion3D) -> void:
 		var aabb: AABB = nav_mesh.filter_baking_aabb
 		aabb.position += nav_mesh.filter_baking_aabb_offset
 		aabb = p_nav_region.global_transform * aabb
-		var faces: PackedVector3Array = terrain.generate_nav_mesh_source_geometry(aabb)
+		var faces: PackedVector3Array = terrain.generate_nav_mesh_source_geometry(aabb, false)
 		if not faces.is_empty():
 			source_geometry_data.add_faces(faces, Transform3D.IDENTITY)
 	

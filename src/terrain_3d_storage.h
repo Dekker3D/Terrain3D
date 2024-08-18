@@ -105,7 +105,6 @@ private:
 
 	// Functions
 	void _clear();
-	Image *_get_map_region_ptr(const MapType p_map_type, const int p_region_index) const;
 
 public:
 	Terrain3DStorage() {}
@@ -147,6 +146,7 @@ public:
 	// Maps
 	void set_map_region(const MapType p_map_type, const int p_region_index, const Ref<Image> &p_image);
 	Ref<Image> get_map_region(const MapType p_map_type, const int p_region_index) const;
+	Image *get_map_region_ptr(const MapType p_map_type, const int p_region_index) const;
 	void set_maps(const MapType p_map_type, const TypedArray<Image> &p_maps);
 	TypedArray<Image> get_maps(const MapType p_map_type) const;
 	TypedArray<Image> get_maps_copy(const MapType p_map_type) const;

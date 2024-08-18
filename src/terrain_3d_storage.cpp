@@ -355,7 +355,7 @@ void Terrain3DStorage::set_map_region(const MapType p_map_type, const int p_regi
 	}
 }
 
-Image *Terrain3DStorage::_get_map_region_ptr(const MapType p_map_type, const int p_region_index) const {
+Image *Terrain3DStorage::get_map_region_ptr(const MapType p_map_type, const int p_region_index) const {
 	switch (p_map_type) {
 		case TYPE_HEIGHT:
 			if (p_region_index >= 0 && p_region_index < _height_maps.size()) {
@@ -509,7 +509,7 @@ Color Terrain3DStorage::get_pixel(const MapType p_map_type, const Vector3 &p_glo
 					descaled_position.z - global_offset.y)
 					.floor());
 	img_pos = img_pos.clamp(Vector2i(), Vector2i(_region_size - 1, _region_size - 1));
-	Image *map = _get_map_region_ptr(p_map_type, region);
+	Image *map = get_map_region_ptr(p_map_type, region);
 	return map->get_pixelv(img_pos);
 }
 

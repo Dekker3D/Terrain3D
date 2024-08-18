@@ -21,6 +21,8 @@
 #include "terrain_3d.h"
 #include "terrain_3d_util.h"
 
+#include <map>
+
 ///////////////////////////
 // Private Functions
 ///////////////////////////
@@ -166,6 +168,7 @@ void Terrain3D::_setup_mouse_picking() {
 	_mouse_quad->set_mesh(quad);
 	String shader_code = String(
 #include "shaders/gpu_depth.glsl"
+#include <map>
 	);
 	Ref<Shader> shader;
 	shader.instantiate();
@@ -544,25 +547,82 @@ void Terrain3D::_generate_triangles(PackedVector3Array &p_vertices, PackedVector
 	ERR_FAIL_COND(!_storage.is_valid());
 	int32_t step = 1 << CLAMP(p_lod, 0, 8);
 
-	if (!p_global_aabb.has_volume()) {
-		int32_t region_size = (int)_storage->get_region_size();
+	int32_t z_start = std::numeric_limits<int32_t>::min();
+	int32_t z_end = std::numeric_limits<int32_t>::max();
+	int32_t x_start = std::numeric_limits<int32_t>::min();
+	int32_t x_end = std::numeric_limits<int32_t>::max();
 
-		TypedArray<Vector2i> region_offsets = _storage->get_region_offsets();
-		for (int r = 0; r < region_offsets.size(); ++r) {
-			Vector2i region_offset = (Vector2i)region_offsets[r] * region_size;
+	if (p_global_aabb.has_volume()) {
+		z_start = (int32_t)Math::ceil(p_global_aabb.position.z / _mesh_vertex_spacing);
+		z_end = (int32_t)Math::floor(p_global_aabb.get_end().z / _mesh_vertex_spacing) + 1;
+		x_start = (int32_t)Math::ceil(p_global_aabb.position.x / _mesh_vertex_spacing);
+		x_end = (int32_t)Math::floor(p_global_aabb.get_end().x / _mesh_vertex_spacing) + 1;
+	}
 
-			for (int32_t z = region_offset.y; z < region_offset.y + region_size; z += step) {
-				for (int32_t x = region_offset.x; x < region_offset.x + region_size; x += step) {
-					_generate_triangle_pair(p_vertices, p_uvs, p_lod, p_filter, p_require_nav, x, z);
+	std::map<Vector2i, int32_t> vertex_map;
+	std::vector<Vector3> vertices;
+
+	int32_t region_size = (int)_storage->get_region_size();
+
+	TypedArray<Vector2i> region_offsets = _storage->get_region_offsets();
+	for (int r = 0; r < region_offsets.size(); ++r) {
+		Vector2i region_offset = (Vector2i)region_offsets[r] * region_size;
+		Image *control = _storage->get_map_region_ptr(Terrain3DStorage::MapType::TYPE_CONTROL, r);
+		Image *height = _storage->get_map_region_ptr(Terrain3DStorage::MapType::TYPE_HEIGHT, r);
+
+		uint32_t z_start_local = std::max(region_offset.y, z_start);
+		uint32_t z_end_local = std::min(region_offset.y + region_size, z_end);
+		uint32_t x_start_local = std::max(region_offset.x, x_start);
+		uint32_t x_end_local = std::min(region_offset.x + region_size, x_end);
+
+		for (int32_t z = z_start_local; z < z_end_local; z += step) {
+			for (int32_t x = region_offset.x; x < region_offset.x + region_size; x += step) {
+				uint32_t ctrl = as_uint(control->get_pixel(x, z).r);
+				if (is_hole(ctrl) || (p_require_nav && !is_nav(ctrl))) {
+					continue;
+				}
+				//Okay, this vertex can be added.
+				vertices.push_back(Vector3(x * _mesh_vertex_spacing, height->get_pixel(x - region_offset.x, z - region_offset.y).r, z * _mesh_vertex_spacing));
+				vertex_map[Vector2i(x, z)] = (uint32_t)vertices.size();
+
+				//Can we make triangles?
+				auto xz = vertex_map.find(Vector2i(x - 1, z - 1));
+				auto xsz = vertex_map.find(Vector2i(x, z - 1));
+				auto xzs = vertex_map.find(Vector2i(x - 1, z));
+				auto xszs = vertex_map.find(Vector2i(x, z));
+
+				if (xz != vertex_map.end() && xszs != vertex_map.end() && xzs != vertex_map.end()) {
+					Vector3 v1 = vertices[xz->second];
+					Vector3 v2 = vertices[xszs->second];
+					Vector3 v3 = vertices[xzs->second];
+					p_vertices.push_back(v1);
+					p_vertices.push_back(v2);
+					p_vertices.push_back(v3);
+					if (p_uvs != nullptr) {
+						p_uvs->push_back(Vector2(v1.x, v1.z));
+						p_uvs->push_back(Vector2(v2.x, v2.z));
+						p_uvs->push_back(Vector2(v3.x, v3.z));
+					}
+				}
+
+				if (xz != vertex_map.end() && xsz != vertex_map.end() && xszs != vertex_map.end()) {
+					Vector3 v1 = vertices[xz->second];
+					Vector3 v2 = vertices[xsz->second];
+					Vector3 v3 = vertices[xszs->second];
+					p_vertices.push_back(v1);
+					p_vertices.push_back(v2);
+					p_vertices.push_back(v3);
+					if (p_uvs != nullptr) {
+						p_uvs->push_back(Vector2(v1.x, v1.z));
+						p_uvs->push_back(Vector2(v2.x, v2.z));
+						p_uvs->push_back(Vector2(v3.x, v3.z));
+					}
 				}
 			}
 		}
-	} else {
-		int32_t z_start = (int32_t)Math::ceil(p_global_aabb.position.z / _mesh_vertex_spacing);
-		int32_t z_end = (int32_t)Math::floor(p_global_aabb.get_end().z / _mesh_vertex_spacing) + 1;
-		int32_t x_start = (int32_t)Math::ceil(p_global_aabb.position.x / _mesh_vertex_spacing);
-		int32_t x_end = (int32_t)Math::floor(p_global_aabb.get_end().x / _mesh_vertex_spacing) + 1;
-
+	}
+	/*}
+else {
 		for (int32_t z = z_start; z < z_end; ++z) {
 			for (int32_t x = x_start; x < x_end; ++x) {
 				real_t height = _storage->get_height(Vector3(x, 0.f, z));
@@ -571,7 +631,7 @@ void Terrain3D::_generate_triangles(PackedVector3Array &p_vertices, PackedVector
 				}
 			}
 		}
-	}
+	}*/
 }
 
 // p_vertices is assumed to exist and the destination for data
@@ -1102,7 +1162,10 @@ Ref<Mesh> Terrain3D::bake_mesh(const int p_lod, const Terrain3DStorage::HeightFi
 PackedVector3Array Terrain3D::generate_nav_mesh_source_geometry(const AABB &p_global_aabb, const bool p_require_nav) const {
 	LOG(INFO, "Generating NavMesh source geometry from terrain");
 	PackedVector3Array faces;
+	uint64_t time = Time::get_singleton()->get_ticks_usec();
 	_generate_triangles(faces, nullptr, 0, Terrain3DStorage::HEIGHT_FILTER_NEAREST, p_require_nav, p_global_aabb);
+	time = Time::get_singleton()->get_ticks_usec() - time;
+	godot::UtilityFunctions::print("NavMesh gen: ", time);
 	return faces;
 }
 
