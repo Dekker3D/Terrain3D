@@ -568,7 +568,77 @@ void Terrain3D::_generate_triangles(PackedVector3Array &p_vertices, PackedVector
 	ERR_FAIL_COND(_data == nullptr);
 	int32_t step = 1 << CLAMP(p_lod, 0, 8);
 
-	if (!p_global_aabb.has_volume()) {
+	uint64_t time = godot::Time::get_singleton()->get_ticks_usec();
+
+	Rect2i area = Rect2i(std::numeric_limits<float>::min(), std::numeric_limits<float>::min(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max());
+	if (p_global_aabb.has_volume()) {
+		area = Rect2i(Point2i(p_global_aabb.position.x, p_global_aabb.position.z), Point2i(p_global_aabb.size.x, p_global_aabb.size.z));
+	}
+
+	_data->do_for_regions(
+			area, [this, step, p_require_nav, &p_vertices, &p_uvs](Terrain3DRegion *region, Rect2i world_bounds, Rect2i area_bounds, Rect2i region_local_bounds) {
+				// Loop through each region, basically.
+				const int stride = 64;
+				const int width = stride + 1;
+				Rect2i local_bounds(divide_down(region_local_bounds.position, 64) * 64, divide_up(region_local_bounds.get_end(), 64) * 64);
+				for (int y = local_bounds.position.y; y < local_bounds.get_end().y; y += stride) {
+					for (int x = local_bounds.position.x; x < local_bounds.get_end().x; x += stride) {
+						float heights[width * width];
+						Ref<Image> height_map = region->get_height_map();
+						float control[width * width];
+						Ref<Image> control_map = region->get_control_map();
+						Rect2i chunk;
+						chunk.position = Point2i(x, y);
+						chunk.set_end(Point2i(Math::min(x + stride, (int)_region_size) + 1, Math::min(y + stride, (int)_region_size) + 1));
+						_data->do_for_pixels(chunk, [this, &heights, &control, &height_map, &control_map, width](Terrain3DRegion *region, Point2i world_point, Point2i area_point, Point2i region_local_point) {
+							heights[area_point.x + area_point.y * width] = height_map->get_pixel(region_local_point.x, region_local_point.y).r;
+							control[area_point.x + area_point.y * width] = control_map->get_pixel(region_local_point.x, region_local_point.y).r;
+						});
+						Point2i end = chunk.get_end() - Point2i(1, 1);
+						for (int y2 = 0; y2 < chunk.size.y; y2++) {
+							for (int x2 = 0; x2 < chunk.size.x; x2++) {
+								int offset = x2 + y2 * width;
+								// Check first corner
+								if (is_hole(control[offset]) || (p_require_nav && !is_nav(control[offset]))) {
+									continue;
+								}
+								// Check last corner
+								if (is_hole(control[offset + 1 + width]) || (p_require_nav && !is_nav(control[offset + 1 + width]))) {
+									continue;
+								}
+								Vector3 first((world_bounds.position.x + x + x2) * _mesh_vertex_spacing, heights[offset], (world_bounds.position.y + y + y2) * _mesh_vertex_spacing);
+								Vector3 last((world_bounds.position.x + x + x2 + 1) * _mesh_vertex_spacing, heights[offset + 1 + width], (world_bounds.position.y + y + y2 + 1) * _mesh_vertex_spacing);
+								// One to the side
+								if (!(is_hole(control[offset + 1]) || (p_require_nav && !is_nav(control[offset + 1])))) {
+									Vector3 second((world_bounds.position.x + x2 + 1) * _mesh_vertex_spacing, heights[offset + 1], (world_bounds.position.y + y2) * _mesh_vertex_spacing);
+									p_vertices.push_back(first);
+									p_vertices.push_back(second);
+									p_vertices.push_back(last);
+									if (p_uvs != nullptr) {
+										p_uvs->push_back(Vector2(first.x, first.z));
+										p_uvs->push_back(Vector2(second.x, second.z));
+										p_uvs->push_back(Vector2(last.x, last.z));
+									}
+								} // One to the side
+								if (!(is_hole(control[offset + width]) || (p_require_nav && !is_nav(control[offset + width])))) {
+									Vector3 third((world_bounds.position.x + x2) * _mesh_vertex_spacing, heights[offset + width], (world_bounds.position.y + y2 + 1) * _mesh_vertex_spacing);
+									p_vertices.push_back(first);
+									p_vertices.push_back(last);
+									p_vertices.push_back(third);
+									if (p_uvs != nullptr) {
+										p_uvs->push_back(Vector2(first.x, first.z));
+										p_uvs->push_back(Vector2(last.x, last.z));
+										p_uvs->push_back(Vector2(third.x, third.z));
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			false);
+
+	/*if (!p_global_aabb.has_volume()) {
 		int32_t region_size = (int32_t)_region_size;
 
 		TypedArray<Vector2i> region_locations = _data->get_region_locations();
@@ -595,7 +665,9 @@ void Terrain3D::_generate_triangles(PackedVector3Array &p_vertices, PackedVector
 				}
 			}
 		}
-	}
+	}*/
+
+	godot::UtilityFunctions::print("_generate_triangles: ", godot::Time::get_singleton()->get_ticks_usec() - time, " usec");
 }
 
 // p_vertices is assumed to exist and the destination for data

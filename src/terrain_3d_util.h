@@ -141,6 +141,8 @@ inline uint8_t get_uv_scale(const float p_pixel) { return get_uv_scale(as_uint(p
 inline uint32_t enc_uv_scale(const uint8_t p_scale) { return (p_scale & 0x7) << 7; }
 inline uint32_t gd_get_uv_scale(const uint32_t p_pixel) { return get_uv_scale(p_pixel); }
 inline uint32_t gd_enc_uv_scale(const uint32_t p_scale) { return enc_uv_scale(p_scale); }
+inline Point2i divide_down(const Point2i point, const int divide) { return Point2i((int)Math::floor(point.x / (float)divide), (int)Math::floor(point.y / (float)divide)); }
+inline Point2i divide_up(const Point2i point, const int divide) { return Point2i((int)Math::ceil(point.x / (float)divide), (int)Math::ceil(point.y / (float)divide)); }
 
 inline bool is_hole(const uint32_t p_pixel) { return (p_pixel >> 2 & 0x1) == 1; }
 inline bool is_hole(const float p_pixel) { return is_hole(as_uint(p_pixel)); }

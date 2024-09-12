@@ -94,6 +94,7 @@ public:
 	PackedInt32Array get_region_map() const { return _region_map; }
 	static int get_region_map_index(const Vector2i &p_region_loc);
 	void do_for_regions(Rect2i bounds, std::function<void(Terrain3DRegion *, Rect2i, Rect2i, Rect2i)> callback, bool do_empty_regions);
+	void do_for_pixels(Rect2i p_bounds, std::function<void(Terrain3DRegion *, Point2i, Point2i, Point2i)> p_callback);
 	void set_region_size(int region_size);
 
 	Vector2i get_region_location(const Vector3 &p_global_position) const;

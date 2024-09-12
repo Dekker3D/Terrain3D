@@ -88,6 +88,31 @@ void Terrain3DData::do_for_regions(Rect2i p_bounds, std::function<void(Terrain3D
 	}
 }
 
+void Terrain3DData::do_for_pixels(Rect2i p_bounds, std::function<void(Terrain3DRegion *, Point2i, Point2i, Point2i)> p_callback) {
+	do_for_regions(
+			p_bounds, [p_callback](Terrain3DRegion *region, Rect2i world_bounds, Rect2i area_bounds, Rect2i region_local_bounds) {
+				Point2i end = world_bounds.get_end();
+				Point2i world_point;
+				Point2i area_point;
+				Point2i area_offset = area_bounds.position - world_bounds.position;
+				Point2i region_local_point;
+				Point2i region_local_offset = region_local_bounds.position - world_bounds.position;
+				for (int y = world_bounds.position.y; y < end.y; y++) {
+					world_point.y = y;
+					area_point.y = y + area_offset.y;
+					region_local_point.y = y + region_local_offset.y;
+					for (int x = world_bounds.position.x; x < end.x; x++) {
+						world_point.x = x;
+						area_point.x = x + area_offset.x;
+						region_local_point.x = x + region_local_offset.x;
+						p_callback(region, world_point, area_point, region_local_point);
+					}
+				}
+			},
+			false);
+	//do_for_regions(p_bounds, [](Terrain3DRegion * region, Point2i world_point, Point2i area_point, Point2i region_local_point), false);
+}
+
 void Terrain3DData::set_region_size(int p_new_region_size) {
 	if (p_new_region_size == _region_size)
 		return;
